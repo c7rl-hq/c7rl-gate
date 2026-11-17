@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>C7RL Change Guard</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:16px/1.6 system-ui,sans-serif;background:#000;color:#eee;max-width:720px;margin:40px auto;padding:0 16px}a{color:#d4ff3a}h1,h2{font-weight:600}code{background:#111;padding:2px 5px;border-radius:4px}img{width:160px}</style></head><body>
-<img src="/logo.png" alt="C7RL logo"><h1>C7RL Change Guard</h1>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>C7RL Gate</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:16px/1.6 system-ui,sans-serif;background:#000;color:#eee;max-width:720px;margin:40px auto;padding:0 16px}a{color:#d4ff3a}h1,h2{font-weight:600}code{background:#111;padding:2px 5px;border-radius:4px}img{width:160px}</style></head><body>
+<img src="/logo.png" alt="C7RL logo"><h1>C7RL Gate</h1>
 <p>Change control for AI coding agents. C7RL checks every pull request against an approved change contract and fails a required check when files outside the approved scope are touched.</p>
 <h2>How it works</h2><ol><li>Add <code>.c7rl/contract.json</code> to your default branch with <code>allowed</code> and <code>protected</code> path globs.</li><li>Install the app and make <b>C7RL / scope-check</b> a required status check.</li><li>Any agent's PR (Claude Code, Codex, Cursor) is judged deterministically. Out-of-scope files block the merge.</li></ol>
 <pre><code>{ "version": 1, "task": "Add password reset", "approvedBy": "eng-lead",

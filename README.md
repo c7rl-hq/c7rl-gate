@@ -1,4 +1,4 @@
-# C7RL Change Guard (GitHub App)
+# C7RL Gate (GitHub App)
 
 Deterministic PR scope gate for AI coding agents. On every pull request it reads
 `.c7rl/contract.json` from the **base** branch, compares the PR's changed files to the

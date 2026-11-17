@@ -4,7 +4,7 @@
 <script>
 const o=location.origin;
 document.getElementById('m').value=JSON.stringify({
- name:"C7RL Change Guard", url:o, description:"Blocks AI-agent pull requests that touch files outside an approved change contract.",
+ name:"C7RL Gate", url:o, description:"Blocks AI-agent pull requests that touch files outside an approved change contract.",
  hook_attributes:{url:o+"/api/webhook",active:true}, redirect_url:o+"/setup.html", public:true,
  default_permissions:{checks:"write",contents:"read",pull_requests:"read",metadata:"read"},
  default_events:["pull_request"]});
