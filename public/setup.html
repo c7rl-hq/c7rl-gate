@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>C7RL App Setup</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:16px/1.6 system-ui,sans-serif;background:#000;color:#eee;max-width:720px;margin:40px auto;padding:0 16px}button{font-size:16px;padding:10px 18px;background:#d4ff3a;border:0;border-radius:6px}</style></head><body>
+<h1>Register the C7RL GitHub App</h1><p id="msg">Creates the app from a manifest under the signed-in account.</p>
+<form id="f" method="post" action="https://github.com/settings/apps/new?state=c7rl"><input type="hidden" name="manifest" id="m"><button>Create GitHub App</button></form>
+<script>
+const o=location.origin;
+document.getElementById('m').value=JSON.stringify({
+ name:"C7RL Change Guard", url:o, description:"Blocks AI-agent pull requests that touch files outside an approved change contract.",
+ hook_attributes:{url:o+"/api/webhook",active:true}, redirect_url:o+"/setup.html", public:true,
+ default_permissions:{checks:"write",contents:"read",pull_requests:"read",metadata:"read"},
+ default_events:["pull_request"]});
+const c=new URLSearchParams(location.search).get('code');
+if(c){document.getElementById('f').remove();document.getElementById('msg').textContent='App created. Manifest code: '+c+' (single use, expires in 1 hour).';}
+</script></body></html>
