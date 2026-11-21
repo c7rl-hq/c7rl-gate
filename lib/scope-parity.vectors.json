@@ -1,0 +1,320 @@
+{
+  "version": 1,
+  "note": "Hand-authored expectations. Written before either evaluator; never regenerate from evaluator output. Byte-identical copy lives in c7rl-gate/lib/scope-parity.vectors.json.",
+  "policies": {
+    "taskScoped": {
+      "allowed": ["src/ui/**"],
+      "protected": ["src/ui/secrets/**"],
+      "taskGrants": "required",
+      "approvers": ["lead"]
+    },
+    "directoryOnly": {
+      "allowed": ["src/ui/**"],
+      "protected": ["src/ui/secrets/**"]
+    }
+  },
+  "grants": {
+    "wo-A": {
+      "version": 1,
+      "repository": "acme/app",
+      "workOrderId": "wo-A",
+      "revision": 1,
+      "supersedes": null,
+      "assignment": { "base": "main", "head": "c7rl/wo/wo-A" },
+      "task": "Retitle the dashboard header",
+      "operations": [
+        { "op": "modify", "path": "src/ui/title.ts", "origin": { "kind": "authorization", "witness": "explicit-path" } },
+        { "op": "create", "path": "src/ui/title.test.ts", "origin": { "kind": "companion-test", "of": "src/ui/title.ts" } },
+        { "op": "modify", "path": "src/ui/secrets/key.ts", "origin": { "kind": "approver-added" } }
+      ],
+      "tests": { "run": ["src/ui/layout.test.ts"] },
+      "notRequested": [{ "path": "src/ui/tooltip.ts", "reason": "needs-approval: witness-incomplete" }]
+    },
+    "wo-B": {
+      "version": 1,
+      "repository": "acme/app",
+      "workOrderId": "wo-B",
+      "revision": 1,
+      "supersedes": null,
+      "assignment": { "base": "main", "head": "c7rl/wo/wo-B" },
+      "task": "Fix tooltip delay",
+      "operations": [
+        { "op": "modify", "path": "src/ui/tooltip.ts", "origin": { "kind": "authorization", "witness": "exact-symbol" } }
+      ],
+      "tests": { "run": [] },
+      "notRequested": []
+    }
+  },
+  "contexts": {
+    "verified": {
+      "assignment": "exact",
+      "policyRevision": "current",
+      "approval": { "kind": "github-review", "status": "verified", "reviewer": "lead", "issuancePr": 11 },
+      "changeList": "complete"
+    },
+    "noAssignment": {
+      "assignment": "missing",
+      "policyRevision": "current",
+      "approval": null,
+      "changeList": "complete"
+    },
+    "provisional": {
+      "assignment": "provisional",
+      "policyRevision": "current",
+      "approval": { "kind": "github-review", "status": "verified", "reviewer": "lead", "issuancePr": 11 },
+      "changeList": "complete"
+    },
+    "historical": {
+      "assignment": "exact",
+      "policyRevision": "historical",
+      "approval": { "kind": "github-review", "status": "verified", "reviewer": "lead", "issuancePr": 11 },
+      "changeList": "complete"
+    },
+    "unapproved": {
+      "assignment": "exact",
+      "policyRevision": "current",
+      "approval": { "kind": "github-review", "status": "not-verified", "reviewer": null, "issuancePr": 11 },
+      "changeList": "complete"
+    },
+    "truncated": {
+      "assignment": "exact",
+      "policyRevision": "current",
+      "approval": { "kind": "github-review", "status": "verified", "reviewer": "lead", "issuancePr": 11 },
+      "changeList": "incomplete"
+    }
+  },
+  "cases": [
+    {
+      "name": "allowed source edit: modify title.ts under wo-A",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "modified", "path": "src/ui/title.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "pass", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "authorization:explicit-path" }
+        ]
+      }
+    },
+    {
+      "name": "unapproved neighbor in the same directory: modify tooltip.ts under wo-A",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "modified", "path": "src/ui/tooltip.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/tooltip.ts", "decision": "deny", "reason": "not-in-task-grant", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "creation of the named new test: add title.test.ts under wo-A",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "added", "path": "src/ui/title.test.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "pass", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "create", "path": "src/ui/title.test.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "companion-test:src/ui/title.ts" }
+        ]
+      }
+    },
+    {
+      "name": "run-only test: editing layout.test.ts is denied although running it is required",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "modified", "path": "src/ui/layout.test.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/layout.test.ts", "decision": "deny", "reason": "run-only-test", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "protected path wins even though wo-A grants it",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "modified", "path": "src/ui/secrets/key.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/secrets/key.ts", "decision": "deny", "reason": "protected", "policyRule": "src/ui/secrets/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "rename out of a granted file: neither path operation is granted",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "renamed", "path": "src/ui/heading.ts", "previousPath": "src/ui/title.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "delete", "path": "src/ui/title.ts", "decision": "deny", "reason": "operation-not-granted", "policyRule": "src/ui/**", "grantEntry": null },
+          { "op": "create", "path": "src/ui/heading.ts", "decision": "deny", "reason": "not-in-task-grant", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "rename into a granted create: the delete side is still outside the grant",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "renamed", "path": "src/ui/title.test.ts", "previousPath": "src/ui/tooltip.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "delete", "path": "src/ui/tooltip.ts", "decision": "deny", "reason": "not-in-task-grant", "policyRule": "src/ui/**", "grantEntry": null },
+          { "op": "create", "path": "src/ui/title.test.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "companion-test:src/ui/title.ts" }
+        ]
+      }
+    },
+    {
+      "name": "wrong operation on a granted path: modifying a file granted only for creation",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [{ "status": "modified", "path": "src/ui/title.test.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.test.ts", "decision": "deny", "reason": "operation-not-granted", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "the operation wo-B approves stays outside wo-A but passes under wo-B",
+      "policy": "taskScoped", "grant": "wo-B", "context": "verified",
+      "changes": [{ "status": "modified", "path": "src/ui/tooltip.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "pass", "previewOf": null, "labels": [],
+        "grant": "wo-B@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/tooltip.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "authorization:exact-symbol" }
+        ]
+      }
+    },
+    {
+      "name": "PR A as a whole: two granted operations and the neighbor",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [
+        { "status": "modified", "path": "src/ui/title.ts" },
+        { "status": "added", "path": "src/ui/title.test.ts" },
+        { "status": "modified", "path": "src/ui/tooltip.ts" }
+      ],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "authorization:explicit-path" },
+          { "op": "create", "path": "src/ui/title.test.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "companion-test:src/ui/title.ts" },
+          { "op": "modify", "path": "src/ui/tooltip.ts", "decision": "deny", "reason": "not-in-task-grant", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "outside repository policy, and the built-in protection of .c7rl",
+      "policy": "taskScoped", "grant": "wo-A", "context": "verified",
+      "changes": [
+        { "status": "modified", "path": "README.md" },
+        { "status": "added", "path": ".c7rl/grants/wo-A/2.json" }
+      ],
+      "expected": {
+        "mode": "task-scoped", "scope": "fail", "previewOf": null, "labels": [],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "README.md", "decision": "deny", "reason": "outside-repository-policy", "policyRule": null, "grantEntry": null },
+          { "op": "create", "path": ".c7rl/grants/wo-A/2.json", "decision": "deny", "reason": "protected", "policyRule": ".c7rl/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "missing assignment is unverified, never a pass",
+      "policy": "taskScoped", "grant": null, "context": "noAssignment",
+      "changes": [{ "status": "modified", "path": "src/ui/title.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "unverified", "previewOf": null, "labels": ["no-assignment"],
+        "grant": null, "approval": null,
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.ts", "decision": "undetermined", "reason": "no-verified-grant", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "assigned but no grant at the policy revision is unverified",
+      "policy": "taskScoped", "grant": null, "context": "verified",
+      "changes": [{ "status": "modified", "path": "src/ui/title.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "unverified", "previewOf": null, "labels": ["no-grant"],
+        "grant": null, "approval": null,
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.ts", "decision": "undetermined", "reason": "no-verified-grant", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "grant on base without a verified github-review is unverified",
+      "policy": "taskScoped", "grant": "wo-A", "context": "unapproved",
+      "changes": [{ "status": "modified", "path": "src/ui/title.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "unverified", "previewOf": null, "labels": ["approval-not-verified"],
+        "grant": null, "approval": null,
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.ts", "decision": "undetermined", "reason": "no-verified-grant", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "incomplete change list is unverified even when every listed operation is granted",
+      "policy": "taskScoped", "grant": "wo-A", "context": "truncated",
+      "changes": [{ "status": "modified", "path": "src/ui/title.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "unverified", "previewOf": null, "labels": ["incomplete-change-list"],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "authorization:explicit-path" }
+        ]
+      }
+    },
+    {
+      "name": "provisional assignment yields a labelled preview, not a pass",
+      "policy": "taskScoped", "grant": "wo-A", "context": "provisional",
+      "changes": [{ "status": "modified", "path": "src/ui/title.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "preview", "previewOf": "pass", "labels": ["provisional-assignment"],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/title.ts", "decision": "allow", "reason": "granted", "policyRule": "src/ui/**", "grantEntry": "authorization:explicit-path" }
+        ]
+      }
+    },
+    {
+      "name": "historical policy revision yields a labelled preview, here of a failure",
+      "policy": "taskScoped", "grant": "wo-A", "context": "historical",
+      "changes": [{ "status": "modified", "path": "src/ui/tooltip.ts" }],
+      "expected": {
+        "mode": "task-scoped", "scope": "preview", "previewOf": "fail", "labels": ["historical-policy-revision"],
+        "grant": "wo-A@1", "approval": "github-review",
+        "operations": [
+          { "op": "modify", "path": "src/ui/tooltip.ts", "decision": "deny", "reason": "not-in-task-grant", "policyRule": "src/ui/**", "grantEntry": null }
+        ]
+      }
+    },
+    {
+      "name": "directory-only repository reports that it checked policy and no task grant",
+      "policy": "directoryOnly", "grant": null, "context": "noAssignment",
+      "changes": [
+        { "status": "modified", "path": "src/ui/tooltip.ts" },
+        { "status": "modified", "path": "src/ui/secrets/key.ts" }
+      ],
+      "expected": {
+        "mode": "policy-only", "scope": "fail", "previewOf": null, "labels": ["no-task-grant-checked"],
+        "grant": null, "approval": null,
+        "operations": [
+          { "op": "modify", "path": "src/ui/tooltip.ts", "decision": "allow", "reason": "repository-policy-only", "policyRule": "src/ui/**", "grantEntry": null },
+          { "op": "modify", "path": "src/ui/secrets/key.ts", "decision": "deny", "reason": "protected", "policyRule": "src/ui/secrets/**", "grantEntry": null }
+        ]
+      }
+    }
+  ]
+}
