@@ -22,7 +22,7 @@ export const GrantSchema = z.object({
       op: Op,
       path: z.string().min(1),
       origin: z.object({
-        kind: z.enum(["authorization", "companion-test", "approver-added"]),
+        kind: z.enum(["authorization", "companion-test", "requested-path", "approver-added"]),
         witness: z.string().optional(),
         of: z.string().optional(),
       }),
@@ -158,7 +158,7 @@ export function checkTaskScope(policy: TaskPolicy, grant: Grant | null, res: Res
     const hit = grant.operations.find((g) => g.path === s.path && g.op === s.op);
     if (hit) {
       const o = hit.origin;
-      const entry = o.kind === "authorization" ? `authorization:${o.witness}` : o.kind === "companion-test" ? `companion-test:${o.of}` : o.kind;
+      const entry = o.kind === "authorization" ? `authorization:${o.witness}` : o.kind === "companion-test" ? `companion-test:${o.of}` : o.kind === "requested-path" ? `requested-path:${o.of ?? "named"}` : o.kind;
       return say({ op: s.op, path: s.path, decision: "allow", reason: "granted", policyRule: s.rule, grantEntry: entry }, who);
     }
     const reason = grant.tests.run.includes(s.path)

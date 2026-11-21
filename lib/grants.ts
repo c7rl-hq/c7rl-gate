@@ -36,7 +36,7 @@ export const GrantRecordSchema = z
       z.object({
         op: z.enum(["create", "modify", "delete"]),
         path: z.string().min(1),
-        origin: z.object({ kind: z.enum(["authorization", "companion-test", "approver-added"]), witness: z.string().optional(), of: z.string().optional() }),
+        origin: z.object({ kind: z.enum(["authorization", "companion-test", "requested-path", "approver-added"]), witness: z.string().optional(), of: z.string().optional() }),
       }),
     ),
     tests: z.object({ run: z.array(z.string()) }),
