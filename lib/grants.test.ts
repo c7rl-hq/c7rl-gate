@@ -9,6 +9,8 @@ const ISS_HEAD = "c".repeat(40);
 const GRANT_COMMIT = "d".repeat(40);
 const WORK_HEAD = "e".repeat(40);
 const GRANT_PATH = ".c7rl/grants/wo-A/1.json";
+const MERGED_AT = "2026-11-20T12:00:00Z";
+const BEFORE_MERGE = "2026-11-20T11:00:00Z";
 
 const grant = {
   version: 1,
@@ -28,7 +30,7 @@ const policy = Buffer.from(JSON.stringify({ version: 1, allowed: ["src/ui/**"], 
 
 interface World {
   author: string;
-  reviews: { user: { login: string }; state: string; commit_id: string }[];
+  reviews: { user: { login: string }; state: string; commit_id: string; submitted_at: string }[];
   tip: string;
   checks: { external_id: string; conclusion: string; output: { title: string } }[];
   posted: { conclusion: string; external_id?: string; output: { title: string } }[];
@@ -41,7 +43,7 @@ function respond(body: unknown, status = 200) {
 const file = (b: Buffer) => ({ type: "file", encoding: "base64", content: b.toString("base64") });
 
 beforeEach(() => {
-  w = { author: "dev", reviews: [{ user: { login: "lead" }, state: "APPROVED", commit_id: ISS_HEAD }], tip: P_NEW, checks: [], posted: [] };
+  w = { author: "dev", reviews: [{ user: { login: "lead" }, state: "APPROVED", commit_id: ISS_HEAD, submitted_at: BEFORE_MERGE }], tip: P_NEW, checks: [], posted: [] };
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const u = new URL(url);
     const p = decodeURIComponent(u.pathname);
@@ -54,8 +56,8 @@ beforeEach(() => {
     if (p === "/repos/acme/app/contents/.c7rl/grants/wo-A") return respond([{ type: "file", name: "1.json", path: GRANT_PATH }]);
     if (p === `/repos/acme/app/contents/${GRANT_PATH}` && (ref === P_NEW || ref === P_OLD || ref === ISS_HEAD)) return respond(file(grantBytes));
     if (p === "/repos/acme/app/commits") return respond([{ sha: GRANT_COMMIT }]);
-    if (p === `/repos/acme/app/commits/${GRANT_COMMIT}/pulls`) return respond([{ number: 2, merged_at: "x" }]);
-    if (p === "/repos/acme/app/pulls/2") return respond({ number: 2, state: "closed", merged_at: "x", user: { login: w.author }, head: { sha: ISS_HEAD, ref: "c7rl/grant/wo-A-1", repo: null }, base: { ref: "main", sha: P_NEW } });
+    if (p === `/repos/acme/app/commits/${GRANT_COMMIT}/pulls`) return respond([{ number: 2, merged_at: MERGED_AT }]);
+    if (p === "/repos/acme/app/pulls/2") return respond({ number: 2, state: "closed", merged_at: MERGED_AT, user: { login: w.author }, head: { sha: ISS_HEAD, ref: "c7rl/grant/wo-A-1", repo: null }, base: { ref: "main", sha: P_NEW } });
     if (p === "/repos/acme/app/pulls/2/files") return respond([{ filename: GRANT_PATH, status: "added" }]);
     if (p === "/repos/acme/app/pulls/2/reviews") return respond(w.reviews);
     if (p === "/repos/acme/app/pulls/1") return respond({ number: 1, state: "open", merged_at: null, changed_files: 1, body: "", user: { login: "dev" }, head: { sha: WORK_HEAD, ref: "c7rl/wo/wo-A", repo: { id: 4242, full_name: "acme/app" } }, base: { ref: "main", sha: P_OLD } });
@@ -79,7 +81,7 @@ describe("resolveGrant — github-review evidence", () => {
     expect(await resolveGrant("t", REPO, P_NEW, "main", "wo-A", ["lead"])).toMatchObject({ state: "unverified", label: "approval-not-verified" });
   });
   it("rejects an approval of an earlier commit", async () => {
-    w.reviews = [{ user: { login: "lead" }, state: "APPROVED", commit_id: "f".repeat(40) }];
+    w.reviews = [{ user: { login: "lead" }, state: "APPROVED", commit_id: "f".repeat(40), submitted_at: BEFORE_MERGE }];
     expect(await resolveGrant("t", REPO, P_NEW, "main", "wo-A", ["lead"])).toMatchObject({ state: "unverified", label: "approval-not-verified" });
   });
 });

@@ -88,6 +88,7 @@ async function decideWork(token: string, repo: RepoRef, pr: Pull, policyRev: str
       notes.push(`${h.from} → ${h.id}: ${res.detail}`);
     } else if (res.state === "unverified") {
       notes.push(`${h.from} → ${h.id}: ${res.label} — ${res.detail}`);
+      for (const x of res.ineffective) notes.push(`${h.id}@${x.revision} is ineffective: ${x.reason} — ${x.detail}`);
       unverified ??= res;
     }
   }
@@ -129,6 +130,9 @@ async function decideWork(token: string, repo: RepoRef, pr: Pull, policyRev: str
     ...head,
     `**Work order:** ${r.workOrderId} (found via ${assigned.from}) · **Active revision:** ${r.workOrderId}@${r.revision}${res.state === "revoked" ? " — REVOCATION" : ""} (\`${res.path}\`, sha256 \`${ev.grantSha256.slice(0, 16)}\`)`,
     `**Approved by:** @${ev.reviewer} on issuance PR #${ev.issuancePr} at \`${short(ev.issuanceHead)}\` (github-review; issuance author @${ev.issuanceAuthor})`,
+    ...(res.ineffective.length
+      ? ["", `**Ineffective revisions (known not approved; they change nothing):**`, ...res.ineffective.map((x) => `- ${r.workOrderId}@${x.revision}: \`${x.reason}\` — ${x.detail}`)]
+      : []),
     ...(notes.length ? ["", "**Other hints:**", ...notes.map((n) => `- ${n}`)] : []),
     "",
     ...opsTable(scope),

@@ -85,10 +85,32 @@ export interface Evidence {
   grantSha256: string;
 }
 
+/** Why a revision on the base branch is known NOT to be approved (it is then ineffective). */
+export type NonApprovalReason =
+  | "direct-push"
+  | "multiple-issuance-prs"
+  | "grant-edited-after-issuance"
+  | "issuance-into-other-base"
+  | "issuance-is-work-pr"
+  | "issuance-not-grant-only"
+  | "content-differs-from-reviewed-commit"
+  | "changes-requested"
+  | "approval-of-non-final-commit"
+  | "self-approval-only"
+  | "approval-after-merge"
+  | "approver-not-in-policy"
+  | "no-approval";
+
+export interface Ineffective {
+  revision: number;
+  reason: NonApprovalReason;
+  detail: string;
+}
+
 export type Resolution =
-  | { state: "active" | "revoked"; record: GrantRecord; path: string; evidence: Evidence }
+  | { state: "active" | "revoked"; record: GrantRecord; path: string; evidence: Evidence; ineffective: Ineffective[] }
   | { state: "no-grant"; detail: string }
-  | { state: "unverified"; label: "approval-not-verified" | "grant-malformed" | "evidence-unavailable"; detail: string };
+  | { state: "unverified"; label: "approval-not-verified" | "grant-malformed" | "evidence-unavailable"; detail: string; ineffective: Ineffective[] };
 
 export interface Chain {
   ok: true;
@@ -133,42 +155,66 @@ export async function readChain(token: string, repo: { id: number; fullName: str
   return { ok: true, revisions };
 }
 
-async function approvalEvidence(
+const notApproved = (reason: NonApprovalReason, detail: string) => ({ reason, detail });
+
+/**
+ * github-review evidence for one revision. Returns the evidence, or the reason the revision is
+ * KNOWN not to be approved. Transport failures throw: unknown is never "not approved".
+ * Only reviews submitted at or before the issuance PR's merge count — a later review cannot
+ * retroactively authorize what was merged without approval.
+ */
+export async function approvalEvidence(
   token: string,
   repo: { id: number; fullName: string },
   ref: string,
   baseRef: string,
   rev: Chain["revisions"][number],
   approvers: string[],
-): Promise<Evidence | string> {
+): Promise<Evidence | { reason: NonApprovalReason; detail: string }> {
   const writes = await commitsTouching(token, repo.fullName, rev.path, ref);
-  if (writes.length !== 1) return `${rev.path} was written by ${writes.length} commits; a grant is created once and never edited`;
+  if (writes.length !== 1) return notApproved("grant-edited-after-issuance", `${rev.path} was written by ${writes.length} commits; a grant is created once and never edited`);
   const merged = (await pullsForCommit(token, repo.fullName, writes[0].sha)).filter((p) => p.merged_at);
-  if (merged.length !== 1) return `${rev.path} did not arrive through exactly one merged issuance PR (found ${merged.length})`;
+  if (merged.length === 0) return notApproved("direct-push", `${rev.path} reached ${baseRef} without a merged issuance PR`);
+  if (merged.length > 1) return notApproved("multiple-issuance-prs", `${rev.path} is claimed by ${merged.length} merged PRs`);
   const issuance = await getPull(token, repo.fullName, merged[0].number);
-  if (!issuance?.merged_at) return `issuance PR #${merged[0].number} is not merged`;
-  if (issuance.base.ref !== baseRef) return `issuance PR #${issuance.number} merged into ${issuance.base.ref}, not ${baseRef}`;
-  if (issuance.number === rev.record.workPr) return `issuance PR #${issuance.number} is the work PR itself`;
+  if (!issuance?.merged_at) throw new Error(`issuance PR #${merged[0].number} could not be read as merged`);
+  if (issuance.base.ref !== baseRef) return notApproved("issuance-into-other-base", `issuance PR #${issuance.number} merged into ${issuance.base.ref}, not ${baseRef}`);
+  if (issuance.number === rev.record.workPr) return notApproved("issuance-is-work-pr", `issuance PR #${issuance.number} is the work PR itself`);
   const files = await listPrFiles(token, repo.fullName, issuance.number);
   const stray = files.filter((f) => f.status !== "added" || !GRANT_FILE.test(f.filename));
-  if (stray.length || !files.some((f) => f.filename === rev.path)) return `issuance PR #${issuance.number} is not grant-only`;
+  if (stray.length || !files.some((f) => f.filename === rev.path)) return notApproved("issuance-not-grant-only", `issuance PR #${issuance.number} is not grant-only`);
   const reviewed = await readFileAt(token, repo.fullName, rev.path, issuance.head.sha);
-  if (!reviewed?.equals(rev.bytes)) return `${rev.path} differs from the reviewed commit ${issuance.head.sha.slice(0, 12)}`;
+  if (!reviewed?.equals(rev.bytes)) return notApproved("content-differs-from-reviewed-commit", `${rev.path} differs from the reviewed commit ${issuance.head.sha.slice(0, 12)}`);
 
+  const mergedAt = Date.parse(issuance.merged_at);
+  const all = (await listReviews(token, repo.fullName, issuance.number)).filter((r) => r.user && ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(r.state));
+  const before = all.filter((r) => r.submitted_at && Date.parse(r.submitted_at) <= mergedAt);
   const latest = new Map<string, { state: string; commit_id: string | null }>();
-  for (const r of await listReviews(token, repo.fullName, issuance.number)) {
-    if (r.user && ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(r.state)) latest.set(r.user.login, r);
-  }
-  for (const [who, r] of latest) if (r.state === "CHANGES_REQUESTED" && approvers.includes(who)) return `@${who} requested changes on issuance PR #${issuance.number}`;
+  for (const r of before) latest.set(r.user!.login, r);
+  const author = issuance.user.login;
+  const head = issuance.head.sha;
+  const at = `issuance PR #${issuance.number} at ${head.slice(0, 12)}`;
+  for (const [who, r] of latest) if (r.state === "CHANGES_REQUESTED" && approvers.includes(who)) return notApproved("changes-requested", `@${who} requested changes on ${at}`);
   for (const [who, r] of latest) {
-    if (r.state === "APPROVED" && r.commit_id === issuance.head.sha && approvers.includes(who) && who !== issuance.user.login) {
-      return { reviewer: who, issuancePr: issuance.number, issuanceAuthor: issuance.user.login, issuanceHead: issuance.head.sha, grantSha256: hash(rev.bytes) };
+    if (r.state === "APPROVED" && r.commit_id === head && approvers.includes(who) && who !== author) {
+      return { reviewer: who, issuancePr: issuance.number, issuanceAuthor: author, issuanceHead: head, grantSha256: hash(rev.bytes) };
     }
   }
-  const seen = [...latest].map(([who, r]) => `@${who} ${r.state.toLowerCase()}${!approvers.includes(who) ? " (not an approver)" : who === issuance.user.login ? " (issuance author)" : r.commit_id !== issuance.head.sha ? " (not the final commit)" : ""}`);
-  return `no qualifying approval on issuance PR #${issuance.number} at ${issuance.head.sha.slice(0, 12)}${seen.length ? `: ${seen.join("; ")}` : ""}`;
+  const approved = [...latest].filter(([, r]) => r.state === "APPROVED");
+  const stale = approved.find(([who, r]) => approvers.includes(who) && who !== author && r.commit_id !== head);
+  if (stale) return notApproved("approval-of-non-final-commit", `@${stale[0]} approved ${String(stale[1].commit_id).slice(0, 12)}, not the final commit of ${at}`);
+  if (approved.some(([who]) => who === author && approvers.includes(who))) return notApproved("self-approval-only", `only the issuance author @${author} approved ${at}`);
+  const late = all.find((r) => r.state === "APPROVED" && approvers.includes(r.user!.login) && r.user!.login !== author && !before.includes(r));
+  if (late) return notApproved("approval-after-merge", `@${late.user!.login} approved ${at} only after it merged`);
+  if (approved.length) return notApproved("approver-not-in-policy", `${approved.map(([w]) => `@${w}`).join(", ")} approved ${at} but ${approved.length > 1 ? "are" : "is"} not a policy approver`);
+  return notApproved("no-approval", `no approval on ${at} before it merged`);
 }
 
+/**
+ * The active revision: the highest revision whose approval is verified. Revisions above it
+ * that are KNOWN not to be approved are ineffective and change nothing. If any revision's
+ * evidence cannot be read, the active state cannot be established: unverified.
+ */
 export async function resolveGrant(
   token: string,
   repo: { id: number; fullName: string },
@@ -177,15 +223,22 @@ export async function resolveGrant(
   workOrderId: string,
   approvers: string[],
 ): Promise<Resolution> {
+  const ineffective: Ineffective[] = [];
   try {
     const chain = await readChain(token, repo, workOrderId, policyRev);
-    if (!chain.ok) return chain.missing ? { state: "no-grant", detail: chain.detail } : { state: "unverified", label: "grant-malformed", detail: chain.detail };
-    const top = chain.revisions[chain.revisions.length - 1];
-    const ev = await approvalEvidence(token, repo, policyRev, baseRef, top, approvers);
-    if (typeof ev === "string") return { state: "unverified", label: "approval-not-verified", detail: `${workOrderId}@${top.record.revision}: ${ev}` };
-    return { state: top.record.kind === "revocation" ? "revoked" : "active", record: top.record, path: top.path, evidence: ev };
+    if (!chain.ok) return chain.missing ? { state: "no-grant", detail: chain.detail } : { state: "unverified", label: "grant-malformed", detail: chain.detail, ineffective };
+    for (let i = chain.revisions.length - 1; i >= 0; i--) {
+      const rev = chain.revisions[i];
+      const ev = await approvalEvidence(token, repo, policyRev, baseRef, rev, approvers);
+      if ("reason" in ev) {
+        ineffective.push({ revision: rev.record.revision, reason: ev.reason, detail: ev.detail });
+        continue;
+      }
+      return { state: rev.record.kind === "revocation" ? "revoked" : "active", record: rev.record, path: rev.path, evidence: ev, ineffective };
+    }
+    return { state: "unverified", label: "approval-not-verified", detail: `${workOrderId}: no revision has a qualifying approval`, ineffective };
   } catch (e) {
     const status = (e as { status?: number }).status;
-    return { state: "unverified", label: "evidence-unavailable", detail: e instanceof Error ? e.message : `GitHub error ${status ?? ""}` };
+    return { state: "unverified", label: "evidence-unavailable", detail: e instanceof Error ? e.message : `GitHub error ${status ?? ""}`, ineffective };
   }
 }

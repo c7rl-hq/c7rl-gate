@@ -166,7 +166,23 @@ export async function pullsForCommit(token: string, repo: string, sha: string) {
 }
 
 export async function listReviews(token: string, repo: string, pr: number) {
-  return (await ghGet<{ user: { login: string } | null; state: string; commit_id: string | null }[]>(token, `/repos/${repo}/pulls/${pr}/reviews?per_page=100`)) ?? [];
+  return (await ghGet<{ user: { login: string } | null; state: string; commit_id: string | null; submitted_at?: string | null }[]>(token, `/repos/${repo}/pulls/${pr}/reviews?per_page=100`)) ?? [];
+}
+
+/** Every open PR (optionally into one base branch). Throws on a truncated listing. */
+export async function listOpenPulls(token: string, repo: string, base?: string): Promise<Pull[]> {
+  const out: Pull[] = [];
+  for (let page = 1; page <= 30; page++) {
+    const q = `state=open&per_page=100&page=${page}${base ? `&base=${encodeURIComponent(base)}` : ""}`;
+    const batch = (await ghGet<Pull[]>(token, `/repos/${repo}/pulls?${q}`)) ?? [];
+    out.push(...batch);
+    if (batch.length < 100) return out;
+  }
+  throw new Error("more than 3000 open PRs; refusing to reconcile a truncated list");
+}
+
+export async function getRepository(token: string, fullName: string) {
+  return ghGet<{ id: number; full_name: string; default_branch: string }>(token, `/repos/${fullName}`);
 }
 
 export async function listCheckRuns(token: string, repo: string, sha: string) {
