@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "note": "Hand-authored. Recorded GitHub evidence for work order wo-A (work PR #1) and the expected resolution. Byte-identical copy in c7rl-gate/lib/amendment.vectors.json. A1 grants modify src/ui/title.ts + create src/ui/title.test.ts; A2 (narrower) grants only modify src/ui/title.ts. The probe operation is create src/ui/title.test.ts.",
+  "approvers": ["lead"],
+  "mergedAt": "2026-11-20T12:00:00Z",
+  "before": "2026-11-20T11:00:00Z",
+  "after": "2026-11-20T13:00:00Z",
+  "grants": {
+    "A1": [["modify", "src/ui/title.ts"], ["create", "src/ui/title.test.ts"]],
+    "A2": [["modify", "src/ui/title.ts"]]
+  },
+  "approvedIssuance": { "author": "dev", "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "final", "at": "before" }] },
+  "cases": [
+    {
+      "name": "A1 approved, no amendment on the base branch (A2 pending or rejected: its PR never merged)",
+      "revisions": [{ "kind": "grant", "ops": "A1", "issuance": "approved" }],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [], "probe": "allow" }
+    },
+    {
+      "name": "A2 merged with only the author's own approval (author is a policy approver)",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "lead", "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "final", "at": "before" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "self-approval-only" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 merged with approval only from someone outside the policy approvers",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "reviews": [{ "user": "outsider", "state": "APPROVED", "commit": "final", "at": "before" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "approver-not-in-policy" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 merged with no review at all",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "reviews": [] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "no-approval" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 merged although the approver's latest review requested changes (rejected, merged anyway)",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "earlier", "at": "before" }, { "user": "lead", "state": "CHANGES_REQUESTED", "commit": "final", "at": "before" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "changes-requested" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 merged with the approver's approval of an earlier commit, not the final one",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "earlier", "at": "before" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "approval-of-non-final-commit" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 merged first and approved only afterwards (a late review cannot authorize retroactively)",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "final", "at": "after" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "approval-after-merge" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 pushed straight to the base branch (no issuance PR)",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": "direct-push" }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "direct-push" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 issued in a PR that also changed application code",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "grantOnly": false, "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "final", "at": "before" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "issuance-not-grant-only" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 on the base branch differs from the bytes the approver reviewed",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "contentMatches": false, "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "final", "at": "before" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "content-differs-from-reviewed-commit" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 edited on the base branch after its issuance",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "writes": 2, "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "final", "at": "before" }] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "grant-edited-after-issuance" }], "probe": "allow" }
+    },
+    {
+      "name": "A2 approved by a policy approver before merge activates it",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": "approved" }
+      ],
+      "expected": { "state": "active", "revision": 2, "label": null, "reviewer": "lead", "ineffective": [], "probe": "deny" }
+    },
+    {
+      "name": "approved revocation blocks the work order and does not revive A1",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "revocation", "ops": null, "issuance": "approved" }
+      ],
+      "expected": { "state": "revoked", "revision": 2, "label": null, "reviewer": "lead", "ineffective": [], "probe": "deny" }
+    },
+    {
+      "name": "unapproved revocation changes nothing",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "revocation", "ops": null, "issuance": { "author": "dev", "reviews": [] } }
+      ],
+      "expected": { "state": "active", "revision": 1, "label": null, "reviewer": "lead", "ineffective": [{ "revision": 2, "reason": "no-approval" }], "probe": "allow" }
+    },
+    {
+      "name": "UNAVAILABLE: A2's review evidence cannot be read",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "reviews": [{ "user": "lead", "state": "APPROVED", "commit": "final", "at": "before" }] }, "unavailable": "reviews" }
+      ],
+      "expected": { "state": "unverified", "revision": null, "label": "evidence-unavailable", "reviewer": null, "ineffective": [], "probe": "undetermined" }
+    },
+    {
+      "name": "UNAVAILABLE: A1's evidence cannot be read after A2 is known unapproved",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved", "unavailable": "pulls-for-commit" },
+        { "kind": "grant", "ops": "A2", "issuance": { "author": "dev", "reviews": [] } }
+      ],
+      "expected": { "state": "unverified", "revision": null, "label": "evidence-unavailable", "reviewer": null, "ineffective": [{ "revision": 2, "reason": "no-approval" }], "probe": "undetermined" }
+    },
+    {
+      "name": "no revision approved at all",
+      "revisions": [{ "kind": "grant", "ops": "A1", "issuance": { "author": "dev", "reviews": [] } }],
+      "expected": { "state": "unverified", "revision": null, "label": "approval-not-verified", "reviewer": null, "ineffective": [{ "revision": 1, "reason": "no-approval" }], "probe": "undetermined" }
+    },
+    {
+      "name": "broken supersedes chain is malformed, not a fallback",
+      "revisions": [
+        { "kind": "grant", "ops": "A1", "issuance": "approved" },
+        { "kind": "grant", "ops": "A2", "issuance": "approved", "brokenChain": true }
+      ],
+      "expected": { "state": "unverified", "revision": null, "label": "grant-malformed", "reviewer": null, "ineffective": [], "probe": "undetermined" }
+    }
+  ]
+}
